@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Components Showroom</string>
+
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="login">Login</string>
+    <string name="forgotten_password">Forgotten password?</string>
+    <string name="forgotten_password_paragraph1">Please enter your email address and we\'ll send you a link to reset your password.</string>
+    <string name="send">Send</string>
+    <string name="error_user_not_found">Error user not found</string>
+    <string name="error_invalid_password">Error invalid password</string>
+    <string name="unknown_error_occurred">Unknown error occurred</string>
+</resources>
