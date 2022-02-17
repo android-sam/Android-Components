@@ -10,7 +10,7 @@ import uk.co.conjure.components.auth.user.UserInfo
 import uk.co.conjure.components.lifecycle.RxViewModel
 import java.util.*
 
-class LoginViewModel(
+open class LoginViewModel(
     private val auth: AuthInteractor,
     private val ui: Scheduler,
     private val io: Scheduler,

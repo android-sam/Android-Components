@@ -9,7 +9,7 @@ import uk.co.conjure.components.lifecycle.RxViewModel
 import java.util.*
 import java.util.concurrent.TimeUnit
 
-class ForgottenPasswordViewModel(
+open class ForgottenPasswordViewModel(
     private val auth: AuthInteractor,
     ui: Scheduler,
     io: Scheduler,
