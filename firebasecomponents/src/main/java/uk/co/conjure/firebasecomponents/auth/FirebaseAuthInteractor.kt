@@ -16,7 +16,7 @@ class FirebaseAuthInteractor(
     }
 
     override fun isValidPassword(password: String): Boolean {
-        return isValidPasswordFun?.invoke(password) ?: password.isNotBlank()
+        return isValidPasswordFun?.invoke(password) ?: (password.length >= 6)
     }
 
     override fun signIn(email: String, password: String): Single<AuthInteractor.SignInResult> {
