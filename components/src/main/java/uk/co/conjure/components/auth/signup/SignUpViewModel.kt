@@ -6,7 +6,7 @@ import uk.co.conjure.components.auth.AuthInteractor
 import uk.co.conjure.components.auth.LoginSignupViewModelBase
 import java.util.*
 
-class SignUpViewModel(
+open class SignUpViewModel(
     private val auth: AuthInteractor,
     private val ui: Scheduler,
     private val io: Scheduler,
