@@ -16,8 +16,12 @@ interface AuthInteractor {
         ERROR
     }
 
-    enum class SignUpResult {
-        SUCCESS,
+    sealed class SignUpResult {
+        class Success(val userInfo: UserInfo) : SignUpResult()
+        class Failure(val error: SignUpError) : SignUpResult()
+    }
+
+    enum class SignUpError {
         ERROR_USER_ALREADY_PRESENT,
         ERROR_INVALID_EMAIL,
         ERROR_INVALID_PASSWORD,
@@ -35,13 +39,16 @@ interface AuthInteractor {
     }
 
     /**
-     * Immediately return a boolean indicating whether or not the given credentials are
-     * syntactically valid. e.g. does the email have the correct form and is the password
-     * long enough.
+     * Immediately return a boolean indicating whether or not the given email is
+     * syntactically valid. e.g. does the email have the correct form
      */
-    fun isValidLogin(email: String, password: String): Boolean
-
     fun isValidEmail(email: String): Boolean
+
+    /**
+     * Immediately return a boolean indicating whether or not the password is
+     * syntactically valid. e.g. is the password long enough
+     */
+    fun isValidPassword(password: String): Boolean
 
     fun signIn(email: String, password: String): Single<SignInResult>
 

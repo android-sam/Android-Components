@@ -1,4 +1,4 @@
-package uk.co.conjure.components.auth.login
+package uk.co.conjure.components.auth.forgotpassword
 
 import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.core.Observer

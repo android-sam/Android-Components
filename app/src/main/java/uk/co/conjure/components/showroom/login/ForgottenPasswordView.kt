@@ -5,7 +5,7 @@ import android.view.View
 import io.reactivex.rxjava3.core.ObservableTransformer
 import io.reactivex.rxjava3.kotlin.addTo
 import uk.co.conjure.components.auth.AuthInteractor
-import uk.co.conjure.components.auth.login.ForgottenPasswordViewModel
+import uk.co.conjure.components.auth.forgotpassword.ForgottenPasswordViewModel
 import uk.co.conjure.components.lifecycle.RxView
 import uk.co.conjure.components.showroom.databinding.ActivityForgottenPasswordBinding
 import java.util.*
