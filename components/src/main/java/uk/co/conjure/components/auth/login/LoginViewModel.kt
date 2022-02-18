@@ -18,6 +18,7 @@ open class LoginViewModel(
 ) : LoginSignupViewModelBase(
     ui, io, computation, "", "", false, false
 ) {
+
     private val forgottenPasswordClicksSubject: PublishSubject<Unit> = PublishSubject.create()
 
     val forgottenPasswordClicks: Observer<Unit> = forgottenPasswordClicksSubject

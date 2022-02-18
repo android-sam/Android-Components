@@ -70,6 +70,16 @@ abstract class LoginSignupViewModelBase(
         .observeOn(ui)
         .hot()
 
+    val emailValid = stateSubject
+        .map { it.emailValid }
+        .observeOn(ui)
+        .hot()
+
+    val passwordValid = stateSubject
+        .map { it.passwordValid }
+        .observeOn(ui)
+        .hot()
+
     val buttonEnabled = stateSubject
         .map { it.emailValid && it.passwordValid }
         .observeOn(ui)
