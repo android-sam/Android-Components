@@ -5,8 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.schedulers.Schedulers
 import uk.co.conjure.components.auth.AuthInteractor
-import uk.co.conjure.components.auth.login.ForgottenPasswordViewModel
+import uk.co.conjure.components.auth.forgotpassword.ForgottenPasswordViewModel
 import uk.co.conjure.components.auth.login.LoginViewModel
+import uk.co.conjure.components.auth.signup.SignUpViewModel
 import java.lang.IllegalArgumentException
 
 class ShowroomViewModelFactory(val authInteractor: AuthInteractor) : ViewModelProvider.Factory {
@@ -16,6 +17,14 @@ class ShowroomViewModelFactory(val authInteractor: AuthInteractor) : ViewModelPr
         when {
             modelClass.isAssignableFrom(LoginViewModel::class.java) -> {
                 return LoginViewModel(
+                    authInteractor,
+                    AndroidSchedulers.mainThread(),
+                    Schedulers.io(),
+                    Schedulers.computation()
+                ) as T
+            }
+            modelClass.isAssignableFrom(SignUpViewModel::class.java) -> {
+                return SignUpViewModel(
                     authInteractor,
                     AndroidSchedulers.mainThread(),
                     Schedulers.io(),

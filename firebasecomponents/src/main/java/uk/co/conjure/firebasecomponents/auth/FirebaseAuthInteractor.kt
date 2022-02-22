@@ -8,15 +8,15 @@ import uk.co.conjure.components.auth.AuthInteractor
 class FirebaseAuthInteractor(
     private val auth: FirebaseAuth,
     private val isValidEmailFun: ((email: String) -> Boolean)? = null,
-    private val isValidLoginFun: ((email: String, password: String) -> Boolean)? = null
+    private val isValidPasswordFun: ((password: String) -> Boolean)? = null
 ) : AuthInteractor {
-    override fun isValidLogin(email: String, password: String): Boolean {
-        return isValidLoginFun?.invoke(email, password)
-            ?: (isValidEmail(email) && password.isNotEmpty())
-    }
 
     override fun isValidEmail(email: String): Boolean {
         return isValidEmailFun?.invoke(email) ?: Patterns.EMAIL_ADDRESS.matcher(email).matches()
+    }
+
+    override fun isValidPassword(password: String): Boolean {
+        return isValidPasswordFun?.invoke(password) ?: (password.length >= 6)
     }
 
     override fun signIn(email: String, password: String): Single<AuthInteractor.SignInResult> {
@@ -49,15 +49,19 @@ class FirebaseAuthInteractor(
             task.addOnCompleteListener {
                 if (emitter.isDisposed) return@addOnCompleteListener
                 if (it.isSuccessful) {
-                    emitter.onSuccess(AuthInteractor.SignUpResult.SUCCESS)
+                    emitter.onSuccess(
+                        AuthInteractor.SignUpResult.Success(
+                            FirebaseUserInfo(it.result?.user as UserInfo)
+                        )
+                    )
                 } else {
                     val error = when (task.exception) {
-                        is FirebaseAuthWeakPasswordException -> AuthInteractor.SignUpResult.ERROR_INVALID_PASSWORD
-                        is FirebaseAuthInvalidCredentialsException -> AuthInteractor.SignUpResult.ERROR_INVALID_EMAIL
-                        is FirebaseAuthUserCollisionException -> AuthInteractor.SignUpResult.ERROR_USER_ALREADY_PRESENT
-                        else -> AuthInteractor.SignUpResult.ERROR
+                        is FirebaseAuthWeakPasswordException -> AuthInteractor.SignUpError.ERROR_INVALID_PASSWORD
+                        is FirebaseAuthInvalidCredentialsException -> AuthInteractor.SignUpError.ERROR_INVALID_EMAIL
+                        is FirebaseAuthUserCollisionException -> AuthInteractor.SignUpError.ERROR_USER_ALREADY_PRESENT
+                        else -> AuthInteractor.SignUpError.ERROR
                     }
-                    emitter.onSuccess(error)
+                    emitter.onSuccess(AuthInteractor.SignUpResult.Failure(error))
                 }
             }
         }

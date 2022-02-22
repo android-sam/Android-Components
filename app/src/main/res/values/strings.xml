@@ -10,4 +10,7 @@
     <string name="error_user_not_found">Error user not found</string>
     <string name="error_invalid_password">Error invalid password</string>
     <string name="unknown_error_occurred">Unknown error occurred</string>
+    <string name="sign_up">Sign Up</string>
+    <string name="error_user_already_exists">This user already exists</string>
+    <string name="error_invalid_email">Your email seems to be invalid</string>
 </resources>

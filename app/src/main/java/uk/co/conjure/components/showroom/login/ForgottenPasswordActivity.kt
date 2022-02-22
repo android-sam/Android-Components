@@ -3,13 +3,10 @@ package uk.co.conjure.components.showroom.login
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
-import uk.co.conjure.components.auth.login.ForgottenPasswordViewModel
-import uk.co.conjure.components.auth.login.LoginViewModel
+import uk.co.conjure.components.auth.forgotpassword.ForgottenPasswordViewModel
 import uk.co.conjure.components.lifecycle.whileStarted
 import uk.co.conjure.components.showroom.ShowroomApp
 import uk.co.conjure.components.showroom.databinding.ActivityForgottenPasswordBinding
-import uk.co.conjure.components.showroom.databinding.LoginFragmentBinding
-import uk.co.conjure.components.showroom.di.ShowroomViewModelFactory
 
 class ForgottenPasswordActivity : AppCompatActivity() {
 
