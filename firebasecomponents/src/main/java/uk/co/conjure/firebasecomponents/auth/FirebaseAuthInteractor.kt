@@ -5,7 +5,7 @@ import com.google.firebase.auth.*
 import io.reactivex.rxjava3.core.Single
 import uk.co.conjure.components.auth.AuthInteractor
 
-class FirebaseAuthInteractor(
+open class FirebaseAuthInteractor(
     private val auth: FirebaseAuth,
     private val isValidEmailFun: ((email: String) -> Boolean)? = null,
     private val isValidPasswordFun: ((password: String) -> Boolean)? = null
