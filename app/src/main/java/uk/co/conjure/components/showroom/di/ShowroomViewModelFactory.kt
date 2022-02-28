@@ -35,8 +35,7 @@ class ShowroomViewModelFactory(val authInteractor: AuthInteractor) : ViewModelPr
                 return ForgottenPasswordViewModel(
                     authInteractor,
                     AndroidSchedulers.mainThread(),
-                    Schedulers.io(),
-                    Schedulers.computation()
+                    Schedulers.io()
                 ) as T
             }
             else -> throw IllegalArgumentException("ViewModel not supported")

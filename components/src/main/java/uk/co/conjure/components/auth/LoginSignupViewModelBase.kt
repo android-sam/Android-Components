@@ -39,23 +39,29 @@ abstract class LoginSignupViewModelBase(
         passwordSubject.map { Action.PasswordChange(it, this::isPasswordValid) }
     )
 
-    private val defaultState = State.Idle(
-        initialEmail,
-        initialPassword,
-        initialEmailValid,
-        initialPasswordValid,
-        null
+    private val defaultState = State(
+        emailText = initialEmail,
+        passwordText = initialPassword,
+        emailValid = initialEmailValid,
+        passwordValid = initialPasswordValid,
+        error = null,
+        loading = false,
+        success = false,
+        userInfo = null,
+        emailChangeCount = 0,
+        passwordChangeCount = 0
     )
-    private val stateSubject = BehaviorSubject.createDefault<State>(defaultState)
+    private val stateSubject = BehaviorSubject.createDefault(defaultState)
 
     init {
         val currentState = { stateSubject.value ?: defaultState }
         keepAlive.add(actions
             .filter { it.validAction(currentState()) }
-            .observeOn(computation)
             .flatMap { it.takeAction(currentState()) }
             .observeOn(ui)
-            .map { it.transformState(currentState()) }
+            .map { Pair(it, currentState()) }
+            .filter { it.first.validTransformation(it.second) }
+            .map { it.first.transformState(it.second) }
             .subscribe({ stateSubject.onNext(it) }, { stateSubject.onNext(defaultState) })
         )
     }
@@ -86,7 +92,7 @@ abstract class LoginSignupViewModelBase(
         .hot()
 
     val loading = stateSubject
-        .map { it is State.Loading }
+        .map { it.loading }
         .observeOn(ui)
         .hot()
 
@@ -96,74 +102,75 @@ abstract class LoginSignupViewModelBase(
         .hot()
 
     protected val actionComplete = stateSubject
-        .filter { it is State.Successful }
+        .filter { it.success }
         .firstOrError()
         .map { Unit }
         .observeOn(ui)
         .hot()
 
-    private sealed class Result {
+    private sealed class Result : ViewModelResult<State> {
         data class UpdateEmail(
             val email: String,
-            val emailValid: Boolean
+            val emailValid: Boolean,
+            val emailChangeCount: Long
         ) : Result() {
             override fun transformState(state: State): State {
-                return State.Idle(
-                    email,
-                    state.passwordText,
-                    emailValid,
-                    state.passwordValid,
-                    state.error
-                )
+                return state.copy(emailText = email, emailValid = emailValid)
+            }
+
+            override fun validTransformation(state: State): Boolean {
+                return state.emailChangeCount < emailChangeCount
             }
         }
 
         data class UpdatePassword(
             val password: String,
-            val passwordValid: Boolean
-        ) :
-            Result() {
+            val passwordValid: Boolean,
+            val passwordChangeCount: Long
+        ) : Result() {
             override fun transformState(state: State): State {
-                return State.Idle(
-                    state.emailText,
-                    password,
-                    state.emailValid,
-                    passwordValid,
-                    state.error
+                return state.copy(
+                    passwordText = password,
+                    passwordValid = passwordValid,
+                    passwordChangeCount = passwordChangeCount
                 )
+            }
+
+            override fun validTransformation(state: State): Boolean {
+                return state.passwordChangeCount < passwordChangeCount
             }
         }
 
         object BeginAction : Result() {
             override fun transformState(state: State): State {
-                return State.Loading(state.emailText, state.passwordText)
+                return state.copy(loading = true, error = null)
+            }
+
+            override fun validTransformation(state: State): Boolean {
+                return !state.loading
             }
         }
 
         data class ActionComplete(val result: ActionResult) : Result() {
             override fun transformState(state: State): State {
                 return when {
-                    result.userInfo != null ->
-                        State.Successful(result.userInfo)
-                    result.error != null ->
-                        State.Idle(
-                            state.emailText, state.passwordText,
-                            isEmailValid = true,
-                            isPasswordValid = true,
-                            err = result.error
-                        )
-                    else ->
-                        State.Idle(
-                            state.emailText, state.passwordText,
-                            isEmailValid = true,
-                            isPasswordValid = true,
-                            err = null
-                        )
+                    result.userInfo != null -> state.copy(
+                        success = true,
+                        userInfo = result.userInfo,
+                        loading = false
+                    )
+                    result.error != null -> state.copy(
+                        error = result.error,
+                        loading = false
+                    )
+                    else -> state.copy()
                 }
             }
-        }
 
-        abstract fun transformState(state: State): State
+            override fun validTransformation(state: State): Boolean {
+                return state.loading
+            }
+        }
     }
 
     protected abstract fun takeAction(email: String, password: String): Observable<ActionResult>
@@ -177,7 +184,7 @@ abstract class LoginSignupViewModelBase(
         val error: Any?
     )
 
-    private sealed class Action {
+    private sealed class Action : ViewModelAction<State, Result> {
         data class ClickButton(
             val io: Scheduler,
             val emailValid: (e: String) -> Boolean,
@@ -202,11 +209,17 @@ abstract class LoginSignupViewModelBase(
         ) : Action() {
             override fun takeAction(state: State): Observable<Result> {
                 val valid = emailValid(email)
-                return Observable.just(Result.UpdateEmail(email, valid))
+                return Observable.just(
+                    Result.UpdateEmail(
+                        email,
+                        valid,
+                        state.emailChangeCount + 1
+                    )
+                )
             }
 
             override fun validAction(state: State): Boolean {
-                return state is State.Idle
+                return !state.loading
             }
         }
 
@@ -216,39 +229,31 @@ abstract class LoginSignupViewModelBase(
         ) : Action() {
             override fun takeAction(state: State): Observable<Result> {
                 val valid = passwordValid(password)
-                return Observable.just(Result.UpdatePassword(password, valid))
+                return Observable.just(
+                    Result.UpdatePassword(
+                        password,
+                        valid,
+                        state.passwordChangeCount + 1
+                    )
+                )
             }
 
             override fun validAction(state: State): Boolean {
-                return state is State.Idle
+                return !state.loading
             }
         }
-
-        abstract fun takeAction(state: State): Observable<Result>
-
-        abstract fun validAction(state: State): Boolean
     }
 
-    private sealed class State(
+    private data class State(
         val emailText: String,
         val passwordText: String,
         val emailValid: Boolean,
         val passwordValid: Boolean,
-        val error: Any?
-    ) {
-        data class Loading(
-            val email: String,
-            val password: String
-        ) : State(email, password, true, true, null)
-
-        data class Idle(
-            val email: String,
-            val password: String,
-            val isEmailValid: Boolean,
-            val isPasswordValid: Boolean,
-            val err: Any?
-        ) : State(email, password, isEmailValid, isPasswordValid, err)
-
-        data class Successful(val userInfo: UserInfo) : State("", "", true, true, null)
-    }
+        val error: Any?,
+        val loading: Boolean,
+        val success: Boolean,
+        val userInfo: UserInfo?,
+        val emailChangeCount: Long,
+        val passwordChangeCount: Long
+    ) : ViewModelState
 }
