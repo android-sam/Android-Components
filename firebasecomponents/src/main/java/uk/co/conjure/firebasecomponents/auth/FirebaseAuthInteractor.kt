@@ -4,6 +4,8 @@ import android.util.Patterns
 import com.google.firebase.auth.*
 import io.reactivex.rxjava3.core.Single
 import uk.co.conjure.components.auth.AuthInteractor
+import uk.co.conjure.firebasecomponents.rxextensions.toSingleTask
+import java.lang.Exception
 
 open class FirebaseAuthInteractor(
     private val auth: FirebaseAuth,
@@ -82,6 +84,59 @@ open class FirebaseAuthInteractor(
                     )
                 }
             }
+        }
+    }
+
+    open fun requestPasswordReset(
+        email: String,
+        actionCodeSettings: ActionCodeSettings
+    ): Single<AuthInteractor.RequestPasswordResetResult> {
+        return try {
+            auth.sendPasswordResetEmail(email, actionCodeSettings)
+                .toSingleTask()
+                .map {
+                    if (it.isSuccessful) {
+                        AuthInteractor.RequestPasswordResetResult.Success(null)
+                    } else {
+                        AuthInteractor.RequestPasswordResetResult.Failure(
+                            AuthInteractor.RequestPasswordResetError.ERROR
+                        )
+                    }
+                }
+        } catch (t: Throwable) {
+            return Single.just(
+                AuthInteractor.RequestPasswordResetResult.Failure(
+                    AuthInteractor.RequestPasswordResetError.ERROR
+                )
+            )
+        }
+    }
+
+    override fun performPasswordReset(
+        code: String,
+        newPassword: String
+    ): Single<AuthInteractor.ResetPasswordResult> {
+        return Single.create { emitter ->
+            val task = auth.confirmPasswordReset(code, newPassword)
+            task.addOnSuccessListener {
+                if (!emitter.isDisposed) {
+                    emitter.onSuccess(AuthInteractor.ResetPasswordResult.Success)
+                }
+            }
+            task.addOnFailureListener {
+                if (!emitter.isDisposed) {
+                    val error = resetPasswordExceptionToError(it)
+                    emitter.onSuccess(AuthInteractor.ResetPasswordResult.Failure(error))
+                }
+            }
+        }
+    }
+
+    private fun resetPasswordExceptionToError(exception: Exception?): AuthInteractor.ResetPasswordError {
+        return when (exception) {
+            is FirebaseAuthActionCodeException -> AuthInteractor.ResetPasswordError.ERROR_CODE_EXPIRED
+            is FirebaseAuthInvalidUserException -> AuthInteractor.ResetPasswordError.ERROR_INVALID_USER
+            else -> AuthInteractor.ResetPasswordError.ERROR_UNKOWN
         }
     }
 }
