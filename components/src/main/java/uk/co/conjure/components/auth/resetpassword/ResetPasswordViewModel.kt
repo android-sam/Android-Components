@@ -12,7 +12,7 @@ import uk.co.conjure.components.auth.ViewModelState
 import uk.co.conjure.components.lifecycle.RxViewModel
 import java.util.*
 
-class ResetPasswordViewModel(
+open class ResetPasswordViewModel(
     private val authInteractor: AuthInteractor,
     private val ui: Scheduler,
     private val io: Scheduler,
