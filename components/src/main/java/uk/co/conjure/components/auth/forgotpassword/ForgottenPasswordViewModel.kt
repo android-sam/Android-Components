@@ -3,6 +3,7 @@ package uk.co.conjure.components.auth.forgotpassword
 import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.core.Observer
 import io.reactivex.rxjava3.core.Scheduler
+import io.reactivex.rxjava3.core.Single
 import io.reactivex.rxjava3.subjects.BehaviorSubject
 import io.reactivex.rxjava3.subjects.PublishSubject
 import uk.co.conjure.components.auth.*
@@ -15,7 +16,8 @@ open class ForgottenPasswordViewModel(
     io: Scheduler,
     private val validateEmail: ((e: String) -> Boolean)? = null,
     initialEmail: String = "",
-    initialEmailValid: Boolean = false
+    initialEmailValid: Boolean = false,
+    private val onRequestPasswordReset: ((email: String) -> Single<AuthInteractor.RequestPasswordResetResult>)? = null
 ) : RxViewModel() {
     private val emailSubject: PublishSubject<String> = PublishSubject.create()
     private val sendClicksSubject: PublishSubject<Unit> = PublishSubject.create()
@@ -24,7 +26,7 @@ open class ForgottenPasswordViewModel(
     val sendClicks: Observer<Unit> = sendClicksSubject
 
     private val actions = Observable.merge(
-        sendClicksSubject.map { Action.ClickSend(auth, io) },
+        sendClicksSubject.map { Action.ClickSend(this::requestPasswordReset, io) },
         emailSubject.map { Action.EmailChange(it, this::isEmailValid) }
     )
 
@@ -76,14 +78,21 @@ open class ForgottenPasswordViewModel(
         .observeOn(ui)
         .hot()
 
-    fun isEmailValid(email: String) = validateEmail?.invoke(email) ?: auth.isValidEmail(email)
+    open fun requestPasswordReset(email: String): Single<AuthInteractor.RequestPasswordResetResult> {
+        return onRequestPasswordReset?.invoke(email) ?: auth.requestPasswordReset(email)
+    }
+
+    open fun isEmailValid(email: String) = validateEmail?.invoke(email) ?: auth.isValidEmail(email)
 
     protected sealed class Action : ViewModelAction<State, Result> {
-        data class ClickSend(val auth: AuthInteractor, val io: Scheduler) : Action() {
+        data class ClickSend(
+            val requestPasswordReset: ((email: String) -> Single<AuthInteractor.RequestPasswordResetResult>),
+            val io: Scheduler
+        ) : Action() {
             override fun takeAction(state: State): Observable<Result> {
                 return Observable.just(1)
                     .observeOn(io)
-                    .flatMapSingle { auth.requestPasswordReset(state.emailText) }
+                    .flatMapSingle { requestPasswordReset(state.emailText) }
                     .map<Result> { Result.ActionComplete(it) }
                     .startWithItem(Result.BeginAction)
             }
