@@ -6,8 +6,8 @@ import uk.co.conjure.components.auth.user.UserInfo
 interface AuthInteractor {
 
     sealed class SignInResult {
-        class Success(val userInfo: UserInfo) : SignInResult()
-        class Failure(val error: SignInError) : SignInResult()
+        data class Success(val userInfo: UserInfo) : SignInResult()
+        data class Failure(val error: SignInError) : SignInResult()
     }
 
     enum class SignInError {
@@ -17,8 +17,20 @@ interface AuthInteractor {
     }
 
     sealed class SignUpResult {
-        class Success(val userInfo: UserInfo) : SignUpResult()
-        class Failure(val error: SignUpError) : SignUpResult()
+        data class Success(val userInfo: UserInfo) : SignUpResult()
+        data class Failure(val error: SignUpError) : SignUpResult()
+    }
+
+    sealed class ResetPasswordResult {
+        object Success : ResetPasswordResult()
+        data class Failure(val error: ResetPasswordError) : ResetPasswordResult()
+    }
+
+    enum class ResetPasswordError {
+        ERROR_UNKOWN,
+        ERROR_CODE_EXPIRED,
+        ERROR_INVALID_USER, //user is blocked or doesn't exist
+        ERROR_INVALID_PASSWORD
     }
 
     enum class SignUpError {
@@ -29,8 +41,8 @@ interface AuthInteractor {
     }
 
     sealed class RequestPasswordResetResult {
-        class Success(val resetToken: String?) : RequestPasswordResetResult()
-        class Failure(val error: RequestPasswordResetError) : RequestPasswordResetResult()
+        data class Success(val resetToken: String?) : RequestPasswordResetResult()
+        data class Failure(val error: RequestPasswordResetError) : RequestPasswordResetResult()
     }
 
     enum class RequestPasswordResetError {
@@ -55,4 +67,6 @@ interface AuthInteractor {
     fun signUp(email: String, password: String): Single<SignUpResult>
 
     fun requestPasswordReset(email: String): Single<RequestPasswordResetResult>
+
+    fun performPasswordReset(code: String, newPassword: String): Single<ResetPasswordResult>
 }

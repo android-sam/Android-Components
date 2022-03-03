@@ -1,19 +1,14 @@
 package uk.co.conjure.components.auth.login
 
 import io.reactivex.rxjava3.core.Scheduler
-import io.reactivex.rxjava3.internal.schedulers.TrampolineScheduler
-import io.reactivex.rxjava3.observers.TestObserver
 import io.reactivex.rxjava3.schedulers.Schedulers.trampoline
-import io.reactivex.rxjava3.schedulers.TestScheduler
 import io.reactivex.rxjava3.subjects.PublishSubject
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.mockito.ArgumentMatchers.anyString
-import org.mockito.invocation.InvocationOnMock
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
-import org.mockito.stubbing.Answer
 import uk.co.conjure.components.auth.AuthInteractor
 import uk.co.conjure.components.auth.user.UserInfo
 

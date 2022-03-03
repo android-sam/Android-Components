@@ -30,10 +30,11 @@ class ForgottenPasswordView(
     override fun onStart() {
         super.onStart()
         binding.etEmail.bind(viewModel.emailInput, viewModel.email)
-        binding.btnSend.bind(viewModel.sendClicks, viewModel.sendButtonEnabled)
-        viewModel.notifyValidEmail.subscribe {
-            binding.etEmail.error = if (it) null else "Please enter a valid email"
-        }.addTo(subscriptions)
+        binding.btnSend.bind(viewModel.sendClicks, viewModel.emailValid)
+        viewModel.emailValid
+            .withLatestFrom(viewModel.email) { a, b -> a || b.isBlank() }
+            .subscribe { binding.etEmail.error = if (it) null else "Please enter a valid email" }
+            .addTo(subscriptions)
         viewModel.error.compose(toErrorText).subscribe {
             binding.tvError.text = it
         }.addTo(subscriptions)
