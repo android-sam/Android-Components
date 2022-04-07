@@ -10,6 +10,13 @@ import uk.co.conjure.components.auth.stateviewmodel.*
 import java.util.*
 import java.util.concurrent.TimeUnit
 
+/**
+ * A view model for requesting a password reset when a user has forgotten their password. The user
+ * must provide an email address and then typically the [auth] implementation will send a password
+ * reset link to that email when the send button is clicked.
+ *
+ * Once the email has been successfully sent the view should be closed and the view model disposed of.
+ */
 open class ForgottenPasswordViewModel(
     private val auth: AuthInteractor,
     private val ui: Scheduler,
@@ -24,7 +31,14 @@ open class ForgottenPasswordViewModel(
     private val emailSubject: PublishSubject<String> = PublishSubject.create()
     private val sendClicksSubject: PublishSubject<Unit> = PublishSubject.create()
 
+    /**
+     * Input observer for email text changes
+     */
     val emailInput: Observer<String> = emailSubject
+
+    /**
+     * Input observer for send button clicks
+     */
     val sendClicks: Observer<Unit> = sendClicksSubject
 
     override fun getActions(): Observable<Action> = Observable.merge(
@@ -47,28 +61,44 @@ open class ForgottenPasswordViewModel(
             .hot()
     }
 
+    /**
+     * The current email as a string
+     */
     val email: Observable<String> = stateSubject
         .map { it.email.text }
         .debounce(100, TimeUnit.MILLISECONDS, io)
         .distinctUiHot()
 
+    /**
+     * True if the view should show a loading indicator, false otherwise
+     */
     val loading: Observable<Boolean> = stateSubject
         .map { it.loading }
         .distinctUiHot()
 
+    /**
+     * True if the email was successfully sent, false otherwise. Once this emits true
+     * the view model is no longer valid for use as the view has served its purpose.
+     */
     val emailSent: Observable<Boolean> = stateSubject
         .map { it.success }
         .distinctUiHot()
 
+    /**
+     * True if the email text currently represents a valid email, false otherwise
+     */
     val emailValid: Observable<Boolean> = stateSubject
         .map { it.emailValid }
         .distinctUiHot()
 
+    /**
+     * Emits an optional [AuthInteractor.RequestPasswordResetError] object after the password
+     * reset was requested if the request was un-successful. Otherwise it simply emits [Optional.empty]
+     */
     val error: Observable<Optional<AuthInteractor.RequestPasswordResetError>> = stateSubject
         .map { Optional.ofNullable(it.error) }
-        .distinctUntilChanged()
-        .observeOn(ui)
-        .hot()
+        .startWithItem(Optional.empty())
+        .distinctUiHot()
 
     open fun requestPasswordReset(email: String): Single<AuthInteractor.RequestPasswordResetResult> {
         return onRequestPasswordReset?.invoke(email) ?: auth.requestPasswordReset(email)

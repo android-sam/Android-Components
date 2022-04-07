@@ -21,10 +21,20 @@ abstract class StateViewModelBase<S : ViewModelState, R : ViewModelResult<S>, A 
     private val ui: Scheduler
 ) : RxViewModel() {
 
+    /**
+     * Get an observable stream of actions being produced by the view
+     */
     protected abstract fun getActions(): Observable<A>
 
+    /**
+     * Get the initial state of this view model
+     */
     protected abstract fun getDefaultState(): S
 
+    /**
+     * Get the current state of the view model. The first time you get the state the actions
+     * are subscribed to and will update the state from then on.
+     */
     protected val stateSubject: BehaviorSubject<S> by lazy {
         //So as not to call abstract functions from the base class let's initialize this lazily
         val stateSubject = BehaviorSubject.createDefault(getDefaultState())
