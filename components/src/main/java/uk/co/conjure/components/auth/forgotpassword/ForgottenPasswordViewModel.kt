@@ -4,79 +4,101 @@ import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.core.Observer
 import io.reactivex.rxjava3.core.Scheduler
 import io.reactivex.rxjava3.core.Single
-import io.reactivex.rxjava3.subjects.BehaviorSubject
 import io.reactivex.rxjava3.subjects.PublishSubject
 import uk.co.conjure.components.auth.*
-import uk.co.conjure.components.lifecycle.RxViewModel
+import uk.co.conjure.components.auth.stateviewmodel.*
 import java.util.*
+import java.util.concurrent.TimeUnit
 
+/**
+ * A view model for requesting a password reset when a user has forgotten their password. The user
+ * must provide an email address and then typically the [auth] implementation will send a password
+ * reset link to that email when the send button is clicked.
+ *
+ * Once the email has been successfully sent the view should be closed and the view model disposed of.
+ */
 open class ForgottenPasswordViewModel(
     private val auth: AuthInteractor,
-    ui: Scheduler,
-    io: Scheduler,
+    private val ui: Scheduler,
+    private val io: Scheduler,
     private val validateEmail: ((e: String) -> Boolean)? = null,
-    initialEmail: String = "",
-    initialEmailValid: Boolean = false,
+    private val initialEmail: String = "",
+    private val initialEmailValid: Boolean = false,
     private val onRequestPasswordReset: ((email: String) -> Single<AuthInteractor.RequestPasswordResetResult>)? = null
-) : RxViewModel() {
+) : StateViewModelBase<ForgottenPasswordViewModel.State, ForgottenPasswordViewModel.Result, ForgottenPasswordViewModel.Action>(
+    ui
+) {
     private val emailSubject: PublishSubject<String> = PublishSubject.create()
     private val sendClicksSubject: PublishSubject<Unit> = PublishSubject.create()
 
+    /**
+     * Input observer for email text changes
+     */
     val emailInput: Observer<String> = emailSubject
+
+    /**
+     * Input observer for send button clicks
+     */
     val sendClicks: Observer<Unit> = sendClicksSubject
 
-    private val actions = Observable.merge(
+    override fun getActions(): Observable<Action> = Observable.merge(
         sendClicksSubject.map { Action.ClickSend(this::requestPasswordReset, io) },
         emailSubject.map { Action.EmailChange(it, this::isEmailValid) }
     )
 
-    protected val defaultState = State(
-        emailText = initialEmail,
+    override fun getDefaultState() = State(
+        email = SynchronizedText(initialEmail),
         emailValid = initialEmailValid,
         loading = false,
-        emailChanges = 0,
         error = null,
         success = false
     )
-    protected val stateSubject = BehaviorSubject.createDefault(defaultState)
 
-    init {
-        val currentState = { stateSubject.value ?: defaultState }
-        keepAlive.add(actions
-            .filter { it.validAction(currentState()) }
-            .flatMap { it.takeAction(currentState()) }
+    private fun <T : Any> Observable<T>.distinctUiHot(): Observable<T> {
+        return this
+            .distinctUntilChanged()
             .observeOn(ui)
-            .map { Pair(it, currentState()) }
-            .filter { it.first.validTransformation(it.second) }
-            .map { it.first.transformState(it.second) }
-            .subscribe({ stateSubject.onNext(it) }, { stateSubject.onNext(defaultState) })
-        )
+            .hot()
     }
 
+    /**
+     * The current email as a string
+     */
     val email: Observable<String> = stateSubject
-        .map { it.emailText }
-        .observeOn(ui)
-        .hot()
+        .map { it.email.text }
+        .debounce(100, TimeUnit.MILLISECONDS, io)
+        .distinctUiHot()
 
+    /**
+     * True if the view should show a loading indicator, false otherwise
+     */
     val loading: Observable<Boolean> = stateSubject
         .map { it.loading }
-        .observeOn(ui)
-        .hot()
+        .distinctUiHot()
 
+    /**
+     * True if the email was successfully sent, false otherwise. Once this emits true
+     * the view model is no longer valid for use as the view has served its purpose.
+     */
     val emailSent: Observable<Boolean> = stateSubject
         .map { it.success }
-        .observeOn(ui)
-        .hot()
+        .distinctUiHot()
 
+    /**
+     * True if the email text currently represents a valid email, false otherwise
+     */
     val emailValid: Observable<Boolean> = stateSubject
         .map { it.emailValid }
-        .observeOn(ui)
-        .hot()
+        .distinctUiHot()
 
+    /**
+     * Emits an optional [AuthInteractor.RequestPasswordResetError] object after the password
+     * reset was requested if the request was un-successful. Otherwise it simply emits [Optional.empty]
+     */
     val error: Observable<Optional<AuthInteractor.RequestPasswordResetError>> = stateSubject
         .map { Optional.ofNullable(it.error) }
-        .observeOn(ui)
-        .hot()
+        .startWithItem(Optional.empty())
+        .distinctUiHot()
 
     open fun requestPasswordReset(email: String): Single<AuthInteractor.RequestPasswordResetResult> {
         return onRequestPasswordReset?.invoke(email) ?: auth.requestPasswordReset(email)
@@ -84,7 +106,7 @@ open class ForgottenPasswordViewModel(
 
     open fun isEmailValid(email: String) = validateEmail?.invoke(email) ?: auth.isValidEmail(email)
 
-    protected sealed class Action : ViewModelAction<State, Result> {
+    sealed class Action : ViewModelAction<State, Result> {
         data class ClickSend(
             val requestPasswordReset: ((email: String) -> Single<AuthInteractor.RequestPasswordResetResult>),
             val io: Scheduler
@@ -92,7 +114,7 @@ open class ForgottenPasswordViewModel(
             override fun takeAction(state: State): Observable<Result> {
                 return Observable.just(1)
                     .observeOn(io)
-                    .flatMapSingle { requestPasswordReset(state.emailText) }
+                    .flatMapSingle { requestPasswordReset(state.email.text) }
                     .map<Result> { Result.ActionComplete(it) }
                     .startWithItem(Result.BeginAction)
             }
@@ -108,7 +130,12 @@ open class ForgottenPasswordViewModel(
         ) : Action() {
             override fun takeAction(state: State): Observable<Result> {
                 val valid = emailValid(email)
-                return Observable.just(Result.UpdateEmail(email, state.emailChanges + 1, valid))
+                return Observable.just(
+                    Result.UpdateEmail(
+                        SynchronizedText(email, System.nanoTime()),
+                        valid
+                    )
+                )
             }
 
             override fun validAction(state: State): Boolean {
@@ -117,22 +144,20 @@ open class ForgottenPasswordViewModel(
         }
     }
 
-    protected sealed class Result : ViewModelResult<State> {
+    sealed class Result : ViewModelResult<State> {
         data class UpdateEmail(
-            val email: String,
-            val emailChanges: Long,
+            val email: SynchronizedText,
             val valid: Boolean
         ) : Result() {
             override fun transformState(state: State): State {
                 return state.copy(
-                    emailText = email,
+                    email = email,
                     emailValid = valid,
-                    emailChanges = emailChanges
                 )
             }
 
             override fun validTransformation(state: State): Boolean {
-                return state.emailChanges < emailChanges
+                return state.email.updateTime < email.updateTime
             }
         }
 
@@ -168,11 +193,10 @@ open class ForgottenPasswordViewModel(
 
     }
 
-    protected data class State(
-        val emailText: String,
+    data class State(
+        val email: SynchronizedText,
         val emailValid: Boolean,
         val loading: Boolean,
-        val emailChanges: Long,
         val error: AuthInteractor.RequestPasswordResetError?,
         val success: Boolean
     ) : ViewModelState
