@@ -3,13 +3,13 @@ package uk.co.conjure.components.auth.resetpassword
 import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.core.Observer
 import io.reactivex.rxjava3.core.Scheduler
-import io.reactivex.rxjava3.subjects.BehaviorSubject
+import io.reactivex.rxjava3.core.Single
 import io.reactivex.rxjava3.subjects.PublishSubject
 import uk.co.conjure.components.auth.AuthInteractor
-import uk.co.conjure.components.auth.ViewModelAction
-import uk.co.conjure.components.auth.ViewModelResult
-import uk.co.conjure.components.auth.ViewModelState
-import uk.co.conjure.components.lifecycle.RxViewModel
+import uk.co.conjure.components.auth.stateviewmodel.StateViewModelBase
+import uk.co.conjure.components.auth.stateviewmodel.ViewModelAction
+import uk.co.conjure.components.auth.stateviewmodel.ViewModelResult
+import uk.co.conjure.components.auth.stateviewmodel.ViewModelState
 import java.util.*
 
 open class ResetPasswordViewModel(
@@ -18,7 +18,9 @@ open class ResetPasswordViewModel(
     private val io: Scheduler,
     private val initialPassword: String = "",
     private val isPasswordValid: ((String) -> Boolean)? = null
-) : RxViewModel() {
+) : StateViewModelBase<ResetPasswordViewModel.State, ResetPasswordViewModel.Result, ResetPasswordViewModel.Action>(
+    ui
+) {
     private val passwordSubject: PublishSubject<String> = PublishSubject.create()
     private val confirmPasswordSubject: PublishSubject<String> = PublishSubject.create()
     private val buttonClickSubject: PublishSubject<Unit> = PublishSubject.create()
@@ -32,7 +34,7 @@ open class ResetPasswordViewModel(
     private val currentPassword = passwordSubject.startWithItem(initialPassword)
     private val currentConfirmPassword = confirmPasswordSubject.startWithItem(initialPassword)
 
-    private val actions = Observable.merge(
+    override fun getActions(): Observable<Action> = Observable.merge(
         listOf(
             oobCodeSubject.map { Action.OobCode(it) },
             failedToGetLinkSubject.map { Action.FailedToGetLink },
@@ -46,7 +48,7 @@ open class ResetPasswordViewModel(
         )
     )
 
-    private val defaultState = State(
+    override fun getDefaultState() = State(
         passwordText = initialPassword,
         confirmPasswordText = initialPassword,
         passwordsMatch = true,
@@ -57,63 +59,48 @@ open class ResetPasswordViewModel(
         success = false,
         oobCode = null
     )
-    private val stateSubject = BehaviorSubject.createDefault(defaultState)
 
-    init {
-        val currentState = { stateSubject.value ?: defaultState }
-        keepAlive.add(actions
-            .filter { it.validAction(currentState()) }
-            .flatMap { it.takeAction(currentState()) }
+    private fun <T : Any> Observable<T>.distinctUiHot(): Observable<T> {
+        return this
+            .distinctUntilChanged()
             .observeOn(ui)
-            .map { Pair(it, currentState()) }
-            .filter { it.first.validTransformation(it.second) }
-            .map { it.first.transformState(it.second) }
-            .subscribe({ stateSubject.onNext(it) }, { stateSubject.onNext(defaultState) })
-        )
+            .hot()
     }
 
     val password = stateSubject
         .map { it.passwordText }
-        .observeOn(ui)
-        .hot()
+        .distinctUiHot()
 
     val confirmPassword = stateSubject
         .map { it.confirmPasswordText }
-        .observeOn(ui)
-        .hot()
+        .distinctUiHot()
 
     val passwordsMatch = stateSubject
         .map { it.passwordsMatch }
-        .observeOn(ui)
-        .hot()
+        .distinctUiHot()
 
     val loading = stateSubject
         .map { it.loading }
-        .observeOn(ui)
-        .hot()
+        .distinctUiHot()
 
     val error = stateSubject
         .map { Optional.ofNullable(it.error) }
-        .observeOn(ui)
-        .hot()
+        .distinctUiHot()
 
-    val passwordChangeComplete = stateSubject
+    val passwordChangeComplete: Single<Unit> = stateSubject
         .filter { it.success }
         .firstOrError()
-        .map { Unit }
-        .observeOn(ui)
-        .hot()
+        .map { }
 
     val failedToGetOob = stateSubject
         .map { it.failedToGetOob }
-        .observeOn(ui)
-        .hot()
+        .distinctUiHot()
 
     private fun passwordValid(password: String): Boolean {
         return isPasswordValid?.invoke(password) ?: authInteractor.isValidPassword(password)
     }
 
-    private sealed class Result : ViewModelResult<State> {
+    sealed class Result : ViewModelResult<State> {
         data class SetOobCode(val oobCode: String) : Result() {
             override fun transformState(state: State): State {
                 return state.copy(oobCode = oobCode, failedToGetOob = false, loading = false)
@@ -196,7 +183,7 @@ open class ResetPasswordViewModel(
         }
     }
 
-    private sealed class Action : ViewModelAction<State, Result> {
+    sealed class Action : ViewModelAction<State, Result> {
 
         object FailedToGetLink : Action() {
             override fun takeAction(state: State): Observable<Result> {
@@ -283,7 +270,7 @@ open class ResetPasswordViewModel(
         }
     }
 
-    private data class State(
+    data class State(
         val passwordText: String,
         val confirmPasswordText: String,
         val passwordsMatch: Boolean,

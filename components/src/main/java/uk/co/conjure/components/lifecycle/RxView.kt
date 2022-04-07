@@ -54,7 +54,10 @@ open class RxView<B : ViewBinding> : LifecycleView<B>() {
     }
 
     @SuppressLint("RxSubscribeOnError")
-    protected fun Button.bind(observer: Observer<Unit>, observable: Observable<Boolean> = Observable.just(true)) {
+    protected fun Button.bind(
+        observer: Observer<Unit>,
+        observable: Observable<Boolean> = Observable.just(true)
+    ) {
         this.clicks()
             .doOnSubscribe { disposable -> subscriptions.add(disposable) }
             .subscribe(observer)
@@ -64,7 +67,10 @@ open class RxView<B : ViewBinding> : LifecycleView<B>() {
     }
 
     @SuppressLint("RxSubscribeOnError")
-    protected fun View.bindClicks(observer: Observer<Unit>, observable: Observable<Boolean> = Observable.just(true)) {
+    protected fun View.bindClicks(
+        observer: Observer<Unit>,
+        observable: Observable<Boolean> = Observable.just(true)
+    ) {
         this.clicks()
             .doOnSubscribe { disposable -> subscriptions.add(disposable) }
             .subscribe(observer)

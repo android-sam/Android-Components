@@ -3,11 +3,11 @@ package uk.co.conjure.components.auth
 import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.core.Observer
 import io.reactivex.rxjava3.core.Scheduler
-import io.reactivex.rxjava3.subjects.BehaviorSubject
 import io.reactivex.rxjava3.subjects.PublishSubject
+import uk.co.conjure.components.auth.stateviewmodel.*
 import uk.co.conjure.components.auth.user.UserInfo
-import uk.co.conjure.components.lifecycle.RxViewModel
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 abstract class LoginSignupViewModelBase(
     private val ui: Scheduler,
@@ -17,7 +17,10 @@ abstract class LoginSignupViewModelBase(
     private val initialPassword: String = "",
     private val initialEmailValid: Boolean = false,
     private val initialPasswordValid: Boolean = false
-) : RxViewModel() {
+) : StateViewModelBase<LoginSignupViewModelBase.State, LoginSignupViewModelBase.Result, LoginSignupViewModelBase.Action>(
+    ui
+) {
+
     private val emailSubject: PublishSubject<String> = PublishSubject.create()
     private val passwordSubject: PublishSubject<String> = PublishSubject.create()
     private val buttonClickSubject: PublishSubject<Unit> = PublishSubject.create()
@@ -26,7 +29,7 @@ abstract class LoginSignupViewModelBase(
     val passwordInput: Observer<String> = passwordSubject
     val buttonClicks: Observer<Unit> = buttonClickSubject
 
-    private val actions = Observable.merge(
+    override fun getActions() = Observable.merge(
         buttonClickSubject.map {
             Action.ClickButton(
                 io,
@@ -39,60 +42,54 @@ abstract class LoginSignupViewModelBase(
         passwordSubject.map { Action.PasswordChange(it, this::isPasswordValid) }
     )
 
-    private val defaultState = State(
-        emailText = initialEmail,
-        passwordText = initialPassword,
+    override fun getDefaultState() = State(
+        email = SynchronizedText(initialEmail),
+        password = SynchronizedText(initialPassword),
         emailValid = initialEmailValid,
         passwordValid = initialPasswordValid,
         error = null,
         loading = false,
         success = false,
-        userInfo = null,
-        emailChangeCount = 0,
-        passwordChangeCount = 0
+        userInfo = null
     )
-    private val stateSubject = BehaviorSubject.createDefault(defaultState)
 
-    init {
-        val currentState = { stateSubject.value ?: defaultState }
-        keepAlive.add(actions
-            .filter { it.validAction(currentState()) }
-            .flatMap { it.takeAction(currentState()) }
-            .observeOn(ui)
-            .map { Pair(it, currentState()) }
-            .filter { it.first.validTransformation(it.second) }
-            .map { it.first.transformState(it.second) }
-            .subscribe({ stateSubject.onNext(it) }, { stateSubject.onNext(defaultState) })
-        )
-    }
-
-    val email = stateSubject
-        .map { it.emailText }
+    val email: Observable<String> = stateSubject
+        .map { it.email.text }
+        //when we produce an output we should try and wait until the input has stopped emitting
+        .debounce(100, TimeUnit.MILLISECONDS, computation)
+        .distinctUntilChanged()
         .observeOn(ui)
         .hot()
 
-    val password = stateSubject
-        .map { it.passwordText }
+    val password: Observable<String> = stateSubject
+        .map { it.password.text }
+        //when we produce an output we should try and wait until the input has stopped emitting
+        .debounce(100, TimeUnit.MILLISECONDS, computation)
+        .distinctUntilChanged()
         .observeOn(ui)
         .hot()
 
-    val emailValid = stateSubject
+    val emailValid: Observable<Boolean> = stateSubject
         .map { it.emailValid }
+        .distinctUntilChanged()
         .observeOn(ui)
         .hot()
 
-    val passwordValid = stateSubject
+    val passwordValid: Observable<Boolean> = stateSubject
         .map { it.passwordValid }
+        .distinctUntilChanged()
         .observeOn(ui)
         .hot()
 
-    val buttonEnabled = stateSubject
+    val buttonEnabled: Observable<Boolean> = stateSubject
         .map { it.emailValid && it.passwordValid }
+        .distinctUntilChanged()
         .observeOn(ui)
         .hot()
 
-    val loading = stateSubject
+    val loading: Observable<Boolean> = stateSubject
         .map { it.loading }
+        .distinctUntilChanged()
         .observeOn(ui)
         .hot()
 
@@ -108,36 +105,36 @@ abstract class LoginSignupViewModelBase(
         .observeOn(ui)
         .hot()
 
-    private sealed class Result : ViewModelResult<State> {
+    sealed class Result : ViewModelResult<State> {
         data class UpdateEmail(
-            val email: String,
+            val email: SynchronizedText,
             val emailValid: Boolean,
-            val emailChangeCount: Long
-        ) : Result() {
-            override fun transformState(state: State): State {
-                return state.copy(emailText = email, emailValid = emailValid)
-            }
-
-            override fun validTransformation(state: State): Boolean {
-                return state.emailChangeCount < emailChangeCount
-            }
-        }
-
-        data class UpdatePassword(
-            val password: String,
-            val passwordValid: Boolean,
-            val passwordChangeCount: Long
         ) : Result() {
             override fun transformState(state: State): State {
                 return state.copy(
-                    passwordText = password,
-                    passwordValid = passwordValid,
-                    passwordChangeCount = passwordChangeCount
+                    email = email,
+                    emailValid = emailValid
                 )
             }
 
             override fun validTransformation(state: State): Boolean {
-                return state.passwordChangeCount < passwordChangeCount
+                return state.email.updateTime < email.updateTime
+            }
+        }
+
+        data class UpdatePassword(
+            val password: SynchronizedText,
+            val passwordValid: Boolean,
+        ) : Result() {
+            override fun transformState(state: State): State {
+                return state.copy(
+                    password = password,
+                    passwordValid = passwordValid,
+                )
+            }
+
+            override fun validTransformation(state: State): Boolean {
+                return state.password.updateTime < password.updateTime
             }
         }
 
@@ -179,12 +176,12 @@ abstract class LoginSignupViewModelBase(
 
     protected abstract fun isPasswordValid(password: String): Boolean
 
-    protected data class ActionResult(
+    data class ActionResult(
         val userInfo: UserInfo?,
         val error: Any?
     )
 
-    private sealed class Action : ViewModelAction<State, Result> {
+    sealed class Action : ViewModelAction<State, Result> {
         data class ClickButton(
             val io: Scheduler,
             val emailValid: (e: String) -> Boolean,
@@ -192,14 +189,14 @@ abstract class LoginSignupViewModelBase(
             val takeAction: (e: String, p: String) -> Observable<ActionResult>
         ) : Action() {
             override fun takeAction(state: State): Observable<Result> {
-                return takeAction(state.emailText, state.passwordText)
+                return takeAction(state.email.text, state.password.text)
                     .map<Result> { Result.ActionComplete(it) }
                     .startWithItem(Result.BeginAction)
                     .subscribeOn(io)
             }
 
             override fun validAction(state: State): Boolean {
-                return emailValid(state.emailText) && passwordValid(state.passwordText)
+                return emailValid(state.email.text) && passwordValid(state.password.text)
             }
         }
 
@@ -211,9 +208,8 @@ abstract class LoginSignupViewModelBase(
                 val valid = emailValid(email)
                 return Observable.just(
                     Result.UpdateEmail(
-                        email,
-                        valid,
-                        state.emailChangeCount + 1
+                        SynchronizedText(email, System.nanoTime()),
+                        valid
                     )
                 )
             }
@@ -231,9 +227,8 @@ abstract class LoginSignupViewModelBase(
                 val valid = passwordValid(password)
                 return Observable.just(
                     Result.UpdatePassword(
-                        password,
-                        valid,
-                        state.passwordChangeCount + 1
+                        SynchronizedText(password, System.nanoTime()),
+                        valid
                     )
                 )
             }
@@ -244,16 +239,14 @@ abstract class LoginSignupViewModelBase(
         }
     }
 
-    private data class State(
-        val emailText: String,
-        val passwordText: String,
+    data class State(
+        val email: SynchronizedText,
+        val password: SynchronizedText,
         val emailValid: Boolean,
         val passwordValid: Boolean,
         val error: Any?,
         val loading: Boolean,
         val success: Boolean,
         val userInfo: UserInfo?,
-        val emailChangeCount: Long,
-        val passwordChangeCount: Long
     ) : ViewModelState
 }
