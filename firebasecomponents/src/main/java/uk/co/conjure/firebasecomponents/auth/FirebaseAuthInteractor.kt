@@ -132,7 +132,7 @@ open class FirebaseAuthInteractor(
         }
     }
 
-    override fun sendEmailVerificationLink(email: String): Single<Boolean> {
+    override fun sendEmailVerificationLink(): Single<Boolean> {
         return (auth.currentUser ?: return Single.just(false))
             .sendEmailVerification()
             .toSingleTask()

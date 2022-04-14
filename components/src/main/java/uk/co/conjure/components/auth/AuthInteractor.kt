@@ -70,5 +70,5 @@ interface AuthInteractor {
 
     fun performPasswordReset(code: String, newPassword: String): Single<ResetPasswordResult>
 
-    fun sendEmailVerificationLink(email: String): Single<Boolean>
+    fun sendEmailVerificationLink(): Single<Boolean>
 }
