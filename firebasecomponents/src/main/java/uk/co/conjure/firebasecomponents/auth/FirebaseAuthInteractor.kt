@@ -132,6 +132,13 @@ open class FirebaseAuthInteractor(
         }
     }
 
+    override fun sendEmailVerificationLink(email: String): Single<Boolean> {
+        return (auth.currentUser ?: return Single.just(false))
+            .sendEmailVerification()
+            .toSingleTask()
+            .map { it.isSuccessful }
+    }
+
     private fun resetPasswordExceptionToError(exception: Exception?): AuthInteractor.ResetPasswordError {
         return when (exception) {
             is FirebaseAuthActionCodeException -> AuthInteractor.ResetPasswordError.ERROR_CODE_EXPIRED
